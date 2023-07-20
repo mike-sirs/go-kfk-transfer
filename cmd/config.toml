@@ -1,0 +1,19 @@
+[newkafkawriter]
+batch_timeout= 2 # seconds
+batch_size= 1
+async= true
+dst_host_addr= "kafka-kafka-brokers.kafka.svc.cluster.local:9092"
+
+[newkafkareader]
+src_host_addr= "kafka-kafka-brokers.kafka.svc.cluster.local:9092"
+group_id=  "go-kafka-transfer-0001"
+min_bytes= 8    # 10KB
+max_bytes= 10e6 # 10MB
+commit_interval= 1 #Millisecond
+queue_capacity=  1000
+
+[backup]
+backup_path= "/tmp"
+         
+[restore]
+restore_path= "/tmp"
