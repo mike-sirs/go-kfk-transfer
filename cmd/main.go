@@ -34,6 +34,7 @@ var (
 	groupID     = flag.String("gid", "go-kafka-transfer-0001", "Group ID")
 	workers     = flag.Int("w", runtime.NumCPU(), "Number of workers.")
 	retries     = flag.Int("ret", 4, "Number of retries.")
+	endOffset   = flag.Int64("eo", 0, "EndOffset, stop reading if the message offset is higher then the number. The default is 0, continues replication")
 )
 
 func restore(ctx context.Context, cancel context.CancelFunc, t string) error {
@@ -97,7 +98,9 @@ func restore(ctx context.Context, cancel context.CancelFunc, t string) error {
 	return nil
 }
 
-func transfer(ctx context.Context, st, dt string) error {
+// eo endOffset, st source topic, dt distanation topic
+// set eo to 0 for continues replication.
+func transfer(ctx context.Context, eo int64, st, dt string) error {
 	r := newKafkaReader(st)
 	defer r.Close()
 	w := newKafkaWriter(dt, true)
@@ -119,20 +122,46 @@ func transfer(ctx context.Context, st, dt string) error {
 		}
 	}()
 
-	for {
-		m, err := r.ReadMessage(ctx)
-		if err != nil {
-			fmt.Println("Error reading msg", err)
-			return err
+	switch {
+	case eo == 0:
+		for {
+			m, err := r.ReadMessage(ctx)
+			if err != nil {
+				fmt.Println("Error reading msg", err)
+				return err
+			}
+			err = w.WriteMessages(ctx, kafka.Message{
+				Offset: m.Offset,
+				Key:    m.Key,
+				Value:  m.Value,
+			})
+			if err != nil {
+				fmt.Println("Error writing msg", err)
+				return err
+			}
 		}
-		err = w.WriteMessages(ctx, kafka.Message{
-			Offset: m.Offset,
-			Key:    m.Key,
-			Value:  m.Value,
-		})
-		if err != nil {
-			fmt.Println("Error writing msg", err)
-			return err
+	default:
+		for {
+			m, err := r.ReadMessage(ctx)
+			if err != nil {
+				fmt.Println("Error reading msg", err)
+				return err
+			}
+			if m.Offset >= eo {
+				fmt.Print("The endOffest was reached, the last message offset is %d, partition %d", m.Offset, m.Partition)
+				return nil
+			}
+			err = w.WriteMessages(ctx, kafka.Message{
+				Offset:  m.Offset,
+				Key:     m.Key,
+				Value:   m.Value,
+				Headers: m.Headers,
+				Time:    m.Time,
+			})
+			if err != nil {
+				fmt.Println("Error writing msg", err)
+				return err
+			}
 		}
 	}
 }
@@ -334,7 +363,7 @@ func main() {
 			log.Fatalln("Restore:", err)
 		}
 	case *doTransfer:
-		transfer(ctx, *srcTopic, *dstTopic)
+		transfer(ctx, *endOffset, *srcTopic, *dstTopic)
 	default:
 		fmt.Println("Use one of the following modes: backup (-b), restore (-r), transfer (-t).")
 		cancel()
