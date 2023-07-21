@@ -27,7 +27,7 @@ func newKafkaWriter(t string, async bool) *kafka.Writer {
 		Addr:        kafka.TCP(*dstHost),
 		Topic:       t,
 		Balancer:    &kafka.LeastBytes{},
-		Compression: kafka.Zstd,
+		Compression: kafka.Lz4,
 		Async:       async,
 		// RequiredAcks: kafka.RequireOne,
 		BatchSize:    1,
