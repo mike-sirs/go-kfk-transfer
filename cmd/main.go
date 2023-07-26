@@ -101,7 +101,8 @@ func restore(ctx context.Context, cancel context.CancelFunc, t string) error {
 
 // eo endOffset, st source topic, dt distanation topic
 // set eo to 0 for continues replication.
-func transfer(ctx context.Context, eo int64, ts int64, st, dt string) error {
+// func transfer(ctx context.Context, eo int64, ts int64, st, dt string) error {
+func transfer(ctx context.Context, ts int64, st, dt string) error {
 	r := newKafkaReader(st)
 	defer r.Close()
 	w := newKafkaWriter(dt, true)
@@ -371,7 +372,7 @@ func main() {
 			log.Fatalln("Restore:", err)
 		}
 	case *doTransfer:
-		err := transfer(ctx, *endOffset, *timeStamp, *srcTopic, *dstTopic)
+		err := transfer(ctx, *timeStamp, *srcTopic, *dstTopic)
 		if err != nil {
 			log.Fatalln("Transfer:", err)
 		}
