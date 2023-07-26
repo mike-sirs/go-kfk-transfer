@@ -34,8 +34,8 @@ var (
 	groupID     = flag.String("gid", "go-kafka-transfer-0001", "Group ID")
 	workers     = flag.Int("w", runtime.NumCPU(), "Number of workers.")
 	retries     = flag.Int("ret", 4, "Number of retries.")
-	endOffset   = flag.Int64("eo", 0, "EndOffset, stop reading if the message offset is higher then the number. The default is 0, continues replication")
-	timeStamp   = flag.Int64("ts", 0, "Timestamp, a message timestamp. The default is 0, continues replication")
+	// endOffset   = flag.Int64("eo", 0, "EndOffset, stop reading if the message offset is higher then the number. The default is 0, continues replication")
+	timeStamp = flag.Int64("ts", 0, "Timestamp, a message timestamp. The default is 0, continues replication")
 )
 
 func restore(ctx context.Context, cancel context.CancelFunc, t string) error {
@@ -124,30 +124,6 @@ func transfer(ctx context.Context, eo int64, ts int64, st, dt string) error {
 	}()
 
 	switch {
-	case eo > 0:
-		fmt.Println("Transfer endOffset mode")
-		for {
-			m, err := r.ReadMessage(ctx)
-			if err != nil {
-				fmt.Println("Error reading msg", err)
-				return err
-			}
-			if m.Offset >= eo {
-				fmt.Printf("The endOffest was reached, the last message offset is %d, partition %d", m.Offset, m.Partition)
-				return nil
-			}
-			err = w.WriteMessages(ctx, kafka.Message{
-				Offset:  m.Offset,
-				Key:     m.Key,
-				Value:   m.Value,
-				Headers: m.Headers,
-				Time:    m.Time,
-			})
-			if err != nil {
-				fmt.Println("Error writing msg", err)
-				return err
-			}
-		}
 	case ts > 0:
 		fmt.Println("Transfer timestamp mode")
 		for {
@@ -157,21 +133,21 @@ func transfer(ctx context.Context, eo int64, ts int64, st, dt string) error {
 				return err
 			}
 			// fmt.Printf("message TS %d, your TS %d\n", m.Time.Unix(), ts)
-			if m.Time.Unix() >= ts {
+			if m.Time.Unix() <= ts {
 				// it has to check every partition before exit
-				fmt.Printf("The end timestamp was reached, the last message offset is %d, partition %d\n", m.Offset, m.Partition)
-				break
-			}
-			err = w.WriteMessages(ctx, kafka.Message{
-				Offset:  m.Offset,
-				Key:     m.Key,
-				Value:   m.Value,
-				Headers: m.Headers,
-				Time:    m.Time,
-			})
-			if err != nil {
-				fmt.Println("Error writing msg", err)
-				return err
+				// fmt.Printf("The end timestamp was reached, the last message offset is %d, partition %d\n", m.Offset, m.Partition)
+				// break
+				err = w.WriteMessages(ctx, kafka.Message{
+					Offset:  m.Offset,
+					Key:     m.Key,
+					Value:   m.Value,
+					Headers: m.Headers,
+					Time:    m.Time,
+				})
+				if err != nil {
+					fmt.Println("Error writing msg", err)
+					return err
+				}
 			}
 		}
 	default:
