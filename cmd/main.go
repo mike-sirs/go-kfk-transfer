@@ -45,11 +45,11 @@ func restore(ctx context.Context, cancel context.CancelFunc, t string) error {
 		return err
 	}
 
-	w := newKafkaWriter(t, false)
+	w := NewKafkaWriter(t, false)
 	defer w.Close()
 	defer fmt.Println("end of restore")
 
-	ws := writerStat(w)
+	ws := WriterStat(w)
 	go func() {
 	loop:
 		for {
@@ -99,87 +99,37 @@ func restore(ctx context.Context, cancel context.CancelFunc, t string) error {
 	return nil
 }
 
-// eo endOffset, st source topic, dt distanation topic
-// set eo to 0 for continues replication.
-// func transfer(ctx context.Context, eo int64, ts int64, st, dt string) error {
+// set timestamp(ts) to 0 for continues replication.
 func transfer(ctx context.Context, ts int64, st, dt string) error {
-	r := newKafkaReader(st)
+	r := NewKafkaReader(st)
 	defer r.Close()
-	w := newKafkaWriter(dt, true)
+	w := NewKafkaWriter(dt, true)
 	defer w.Close()
 
-	rs := readerStat(r)
-	go func() {
-		for {
-			r := <-rs
-			fmt.Printf("Reader stats -> Messages: %d, Timeouts: %v, Errors: %d, QueueCapacity: %d\n", r.Messages, r.Timeouts, r.Errors, r.QueueCapacity)
-		}
-	}()
+	PrintStats(r, w)
 
-	ws := writerStat(w)
-	go func() {
-		for {
-			w := <-ws
-			fmt.Printf("Writer stats -> Messages: %d, Timeouts: %v, Errors: %d, QueueCapacity: %d\n", w.Messages, w.WriteTimeout, w.Errors, w.QueueCapacity)
+	for {
+		m, err := r.FetchMessage(ctx)
+		if err != nil {
+			fmt.Println("Error reading msg", err)
+			return err
 		}
-	}()
-
-	switch {
-	case ts > 0:
-		fmt.Println("Transfer timestamp mode")
-		for {
-			m, err := r.ReadMessage(ctx)
-			if err != nil {
-				fmt.Println("Error reading msg", err)
-				return err
-			}
-			// fmt.Printf("message TS %d, your TS %d\n", m.Time.Unix(), ts)
-			if m.Time.Unix() <= ts {
-				// it has to check every partition before exit
-				// fmt.Printf("The end timestamp was reached, the last message offset is %d, partition %d\n", m.Offset, m.Partition)
-				// break
-				err = w.WriteMessages(ctx, kafka.Message{
-					Offset:  m.Offset,
-					Key:     m.Key,
-					Value:   m.Value,
-					Headers: m.Headers,
-					Time:    m.Time,
-				})
-				if err != nil {
-					fmt.Println("Error writing msg", err)
-					return err
-				}
-			}
+		if ts > 0 && m.Time.Unix() > ts {
+			// it has to check every partition before exit
+			continue
 		}
-	default:
-		fmt.Println("Transfer default continues mode")
-		for {
-			m, err := r.ReadMessage(ctx)
-			if err != nil {
-				fmt.Println("Error reading msg", err)
-				return err
-			}
-			err = w.WriteMessages(ctx, kafka.Message{
-				Offset:  m.Offset,
-				Key:     m.Key,
-				Value:   m.Value,
-				Headers: m.Headers,
-				Time:    m.Time,
-			})
-			if err != nil {
-				fmt.Println("Error writing msg", err)
-				return err
-			}
+		err = WriteAndCommit(ctx, w, r, m)
+		if err != nil {
+			return err
 		}
 	}
-	return nil
 }
 
 func backup(ctx context.Context, t string) error {
 	endTime := time.Now()
-	r := newKafkaReader(t)
+	r := NewKafkaReader(t)
 	defer r.Close()
-	rs := readerStat(r)
+	rs := ReaderStat(r)
 	cctx, cancel := context.WithCancel(ctx)
 	g, gctx := errgroup.WithContext(cctx)
 	c := make(chan kafka.Message)
