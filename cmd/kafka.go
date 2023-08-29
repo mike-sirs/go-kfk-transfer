@@ -22,7 +22,7 @@ func NewKafkaReader(t string) *kafka.Reader {
 	})
 }
 
-func NewKafkaWriter(t string, async bool) *kafka.Writer {
+func NewKafkaWriter(t string, async bool, bs int) *kafka.Writer {
 	fmt.Println(t)
 	return &kafka.Writer{
 		Addr:        kafka.TCP(*dstHost),
@@ -31,7 +31,7 @@ func NewKafkaWriter(t string, async bool) *kafka.Writer {
 		Compression: kafka.Lz4,
 		Async:       async,
 		// RequiredAcks: kafka.RequireOne,
-		BatchSize:    1,
+		BatchSize:    bs,
 		BatchTimeout: 2 * time.Second,
 	}
 }
