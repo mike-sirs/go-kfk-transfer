@@ -124,7 +124,6 @@ func transfer(ctx context.Context, cancel context.CancelFunc, ts int64, st, dt s
 	for {
 		m, err := r.FetchMessage(ctx)
 		if err != nil {
-			fmt.Println("Error reading msg", err) // remove
 			cancel()
 			return err
 		}
@@ -134,7 +133,6 @@ func transfer(ctx context.Context, cancel context.CancelFunc, ts int64, st, dt s
 		}
 		err = WriteAndCommit(ctx, w, r, m)
 		if err != nil {
-			fmt.Println("Error writing msg", err) // remove
 			cancel()
 			return err
 		}
