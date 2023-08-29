@@ -115,6 +115,8 @@ func transfer(ctx context.Context, cancel context.CancelFunc, ts int64, st, dt s
 				time.Sleep(5 * time.Second)
 				stat := r.Stats()
 				if stat.Lag == 0 {
+					// wait 30sec to make sure queue was written
+					time.Sleep(30 * time.Second)
 					cancel()
 				}
 			}
