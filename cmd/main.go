@@ -35,7 +35,7 @@ var (
 	workers       = flag.Int("w", runtime.NumCPU(), "Number of workers.")
 	retries       = flag.Int("ret", 4, "Number of retries.")
 	timeStamp     = flag.Int64("ts", 0, "Timestamp, a message timestamp. The default is 0, continues replication")
-	stopAtZeroLag = flag.Bool("zl", false, "ZeroLag")
+	stopAtZeroLag = flag.Bool("zl", false, "Stop at consumer group ZeroLag")
 )
 
 func restore(ctx context.Context, cancel context.CancelFunc, t string) error {
@@ -100,7 +100,7 @@ func restore(ctx context.Context, cancel context.CancelFunc, t string) error {
 }
 
 // Set timestamp(ts) to 0 for continues replication. st srcTopic, dt dstTopic.
-func transfer(ctx context.Context, ts int64, st, dt string) error {
+func transfer(ctx context.Context, cancel context.CancelFunc, ts int64, st, dt string) error {
 	r := NewKafkaReader(st)
 	defer r.Close()
 	w := NewKafkaWriter(dt, true)
@@ -113,39 +113,32 @@ func transfer(ctx context.Context, ts int64, st, dt string) error {
 			for {
 				// check read lag every 5 sec.
 				time.Sleep(5 * time.Second)
-				l, err := CheckReadLag(ctx, *r)
-				if err != nil {
-					fmt.Println("Can't read consumer group read lag,", err)
-				}
-				if l == 0 {
-					<-ctx.Done()
+				stat := r.Stats()
+				if stat.Lag == 0 {
+					cancel()
 				}
 			}
 		}()
 	}
 
-loop:
 	for {
-		select {
-		case <-ctx.Done():
-			break loop
-		default:
-			m, err := r.FetchMessage(ctx)
-			if err != nil {
-				fmt.Println("Error reading msg", err)
-				return err
-			}
-			if ts > 0 && m.Time.Unix() > ts {
-				// it has to check every partition before exit
-				continue
-			}
-			err = WriteAndCommit(ctx, w, r, m)
-			if err != nil {
-				return err
-			}
+		m, err := r.FetchMessage(ctx)
+		if err != nil {
+			fmt.Println("Error reading msg", err) // remove
+			cancel()
+			return err
+		}
+		if ts > 0 && m.Time.Unix() > ts {
+			// it has to check every partition before exit
+			continue
+		}
+		err = WriteAndCommit(ctx, w, r, m)
+		if err != nil {
+			fmt.Println("Error writing msg", err) // remove
+			cancel()
+			return err
 		}
 	}
-	return nil
 }
 
 func backup(ctx context.Context, t string) error {
@@ -345,7 +338,7 @@ func main() {
 			log.Fatalln("Restore:", err)
 		}
 	case *doTransfer:
-		err := transfer(ctx, *timeStamp, *srcTopic, *dstTopic)
+		err := transfer(ctx, cancel, *timeStamp, *srcTopic, *dstTopic)
 		if err != nil {
 			log.Fatalln("Transfer:", err)
 		}

@@ -65,7 +65,7 @@ func PrintStats(r *kafka.Reader, w *kafka.Writer) {
 	go func() {
 		for {
 			r := <-rs
-			fmt.Printf("Reader stats -> Messages: %d, Timeouts: %v, Errors: %d, QueueCapacity: %d\n", r.Messages, r.Timeouts, r.Errors, r.QueueCapacity)
+			fmt.Printf("Reader stats -> Messages: %d, Timeouts: %v, Errors: %d, QueueCapacity: %d, Lag: %d\n", r.Messages, r.Timeouts, r.Errors, r.QueueCapacity, r.Lag)
 		}
 	}()
 
@@ -96,13 +96,4 @@ func WriteAndCommit(ctx context.Context, w *kafka.Writer, r *kafka.Reader, m kaf
 		return err
 	}
 	return nil
-}
-
-// Returns reader consumer group lag (int64) or -1 and error
-func CheckReadLag(ctx context.Context, r kafka.Reader) (int64, error) {
-	rl, err := r.ReadLag(ctx)
-	if err != nil {
-		return -1, err
-	}
-	return rl, nil
 }
