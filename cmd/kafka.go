@@ -97,3 +97,12 @@ func WriteAndCommit(ctx context.Context, w *kafka.Writer, r *kafka.Reader, m kaf
 	}
 	return nil
 }
+
+// Returns reader consumer group lag (int64) or -1 and error
+func CheckReadLag(ctx context.Context, r kafka.Reader) (int64, error) {
+	rl, err := r.ReadLag(ctx)
+	if err != nil {
+		return -1, err
+	}
+	return rl, nil
+}

@@ -22,20 +22,20 @@ import (
 )
 
 var (
-	doBackup    = flag.Bool("b", false, "Backup")
-	doRestore   = flag.Bool("r", false, "Restore")
-	doTransfer  = flag.Bool("t", false, "Transfer")
-	backupPath  = flag.String("bp", "/tmp", "Backup path")
-	restorePath = flag.String("rp", "/tmp", "Restore path to dir")
-	srcHost     = flag.String("s", "", "Source kafka brocker address with port")
-	dstHost     = flag.String("d", "", "Destination kafka brocker address with port.")
-	srcTopic    = flag.String("st", "", "Source topic name")
-	dstTopic    = flag.String("dt", "", "Destination topic name")
-	groupID     = flag.String("gid", "go-kafka-transfer-0001", "Group ID")
-	workers     = flag.Int("w", runtime.NumCPU(), "Number of workers.")
-	retries     = flag.Int("ret", 4, "Number of retries.")
-	// endOffset   = flag.Int64("eo", 0, "EndOffset, stop reading if the message offset is higher then the number. The default is 0, continues replication")
-	timeStamp = flag.Int64("ts", 0, "Timestamp, a message timestamp. The default is 0, continues replication")
+	doBackup      = flag.Bool("b", false, "Backup")
+	doRestore     = flag.Bool("r", false, "Restore")
+	doTransfer    = flag.Bool("t", false, "Transfer")
+	backupPath    = flag.String("bp", "/tmp", "Backup path")
+	restorePath   = flag.String("rp", "/tmp", "Restore path to dir")
+	srcHost       = flag.String("s", "", "Source kafka brocker address with port")
+	dstHost       = flag.String("d", "", "Destination kafka brocker address with port.")
+	srcTopic      = flag.String("st", "", "Source topic name")
+	dstTopic      = flag.String("dt", "", "Destination topic name")
+	groupID       = flag.String("gid", "go-kafka-transfer-0001", "Group ID")
+	workers       = flag.Int("w", runtime.NumCPU(), "Number of workers.")
+	retries       = flag.Int("ret", 4, "Number of retries.")
+	timeStamp     = flag.Int64("ts", 0, "Timestamp, a message timestamp. The default is 0, continues replication")
+	stopAtZeroLag = flag.Bool("zl", false, "ZeroLag")
 )
 
 func restore(ctx context.Context, cancel context.CancelFunc, t string) error {
@@ -99,7 +99,7 @@ func restore(ctx context.Context, cancel context.CancelFunc, t string) error {
 	return nil
 }
 
-// set timestamp(ts) to 0 for continues replication.
+// Set timestamp(ts) to 0 for continues replication. st srcTopic, dt dstTopic.
 func transfer(ctx context.Context, ts int64, st, dt string) error {
 	r := NewKafkaReader(st)
 	defer r.Close()
@@ -108,21 +108,44 @@ func transfer(ctx context.Context, ts int64, st, dt string) error {
 
 	PrintStats(r, w)
 
+	if *stopAtZeroLag {
+		go func() {
+			for {
+				// check read lag every 5 sec.
+				time.Sleep(5 * time.Second)
+				l, err := CheckReadLag(ctx, *r)
+				if err != nil {
+					fmt.Println("Can't read consumer group read lag,", err)
+				}
+				if l == 0 {
+					<-ctx.Done()
+				}
+			}
+		}()
+	}
+
+loop:
 	for {
-		m, err := r.FetchMessage(ctx)
-		if err != nil {
-			fmt.Println("Error reading msg", err)
-			return err
-		}
-		if ts > 0 && m.Time.Unix() > ts {
-			// it has to check every partition before exit
-			continue
-		}
-		err = WriteAndCommit(ctx, w, r, m)
-		if err != nil {
-			return err
+		select {
+		case <-ctx.Done():
+			break loop
+		default:
+			m, err := r.FetchMessage(ctx)
+			if err != nil {
+				fmt.Println("Error reading msg", err)
+				return err
+			}
+			if ts > 0 && m.Time.Unix() > ts {
+				// it has to check every partition before exit
+				continue
+			}
+			err = WriteAndCommit(ctx, w, r, m)
+			if err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 func backup(ctx context.Context, t string) error {
