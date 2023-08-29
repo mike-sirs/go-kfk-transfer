@@ -1,4 +1,4 @@
-Kafka backup and trancfer solution 
+Kafka backup and transfer solution 
 
 ## Build
 
