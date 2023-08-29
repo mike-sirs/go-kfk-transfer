@@ -65,7 +65,7 @@ func PrintStats(r *kafka.Reader, w *kafka.Writer) {
 	go func() {
 		for {
 			r := <-rs
-			fmt.Printf("Reader stats -> Messages: %d, Timeouts: %v, Errors: %d, QueueCapacity: %d\n", r.Messages, r.Timeouts, r.Errors, r.QueueCapacity)
+			fmt.Printf("Reader stats -> Messages: %d, Timeouts: %v, Errors: %d, QueueCapacity: %d, Lag: %d\n", r.Messages, r.Timeouts, r.Errors, r.QueueCapacity, r.Lag)
 		}
 	}()
 
