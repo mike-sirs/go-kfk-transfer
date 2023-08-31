@@ -36,7 +36,7 @@ var (
 	retries       = flag.Int("ret", 4, "Number of retries.")
 	timeStamp     = flag.Int64("ts", 0, "Timestamp, a message timestamp. The default is 0, continues replication")
 	stopAtZeroLag = flag.Bool("zl", false, "Stop at consumer group ZeroLag")
-	batchSize     = flag.Int("bs", 256, "BatchSize, how many messages will be buffered before being sent to a partition")
+	batchSize     = flag.Int("bs", 1, "BatchSize, how many messages will be buffered before being sent to a partition")
 )
 
 func restore(ctx context.Context, cancel context.CancelFunc, t string) error {
@@ -110,11 +110,11 @@ func transfer(ctx context.Context, cancel context.CancelFunc, ts int64, st, dt s
 	PrintStats(r, w)
 
 	if *stopAtZeroLag {
-		time.Sleep(30 * time.Second) // Init delay to avoid false zero lag value
 		go func() {
+			time.Sleep(30 * time.Second) // Init delay to avoid false zero lag value
 			for {
 				// check read lag every 5 sec.
-				time.Sleep(5 * time.Second)
+				time.Sleep(10 * time.Second)
 				stat := r.Stats()
 				if stat.Lag == 0 {
 					fmt.Println("Consumer group read lag 0, exiting.")
@@ -138,6 +138,7 @@ func transfer(ctx context.Context, cancel context.CancelFunc, ts int64, st, dt s
 		}
 		err = WriteAndCommit(ctx, w, r, m)
 		if err != nil {
+			fmt.Println("Last message info, hm:", m.HighWaterMark, "pt:", m.Partition, "offst:", m.Offset, err)
 			cancel()
 			return err
 		}

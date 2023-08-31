@@ -15,7 +15,7 @@ func NewKafkaReader(t string) *kafka.Reader {
 		GroupID:  *groupID,
 		Topic:    t,
 		MinBytes: 8,    // 10KB
-		MaxBytes: 10e6, // 10MB
+		MaxBytes: 32e6, // 10MB
 		// RetentionTime:  300 * time.Second,
 		CommitInterval: time.Millisecond,
 		QueueCapacity:  1000,
